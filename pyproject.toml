@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tdot"
+version = "0.1.0"
+description = "TDOT: Fast Unitree G1 Dynamic Trajectory Optimization Tool (NablaMimic + SuperMimic-lite + MuJoCo 4.0 + 3D Motion Editor)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0",
+    "mujoco>=3.2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "torch>=2.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+tdot = "tdot.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["tdot*"]
+
+[tool.ruff]
+line-length = 105
+indent-width = 2
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]

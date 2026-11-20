@@ -1,0 +1,23 @@
+# Python / virtualenvs
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.venv-*/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Local third-party clones & GPU caches
+third_party/
+.cache/
+tdot_jobs_*/
+*.log
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/

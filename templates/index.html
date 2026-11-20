@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TDOT — Unitree G1 Dynamic Trajectory Optimization & 3D Editor</title>
+    <style>
+        :root {
+            --bg: #11141c;
+            --panel: rgba(22, 26, 36, 0.93);
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --text: #e6eaf2;
+            --muted: #8f9bb3;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+            --warn: #f59e0b;
+            --danger: #ef4444;
+            --violet: #8b5cf6;
+            --surface: rgba(255, 255, 255, 0.05);
+        }
+        * { box-sizing: border-box; user-select: none; }
+        body {
+            margin: 0; overflow: hidden;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg); color: var(--text); font-size: 13px;
+        }
+
+        /* TOP PRELOAD HUD */
+        #preloadHud {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 120; display: flex; align-items: center; gap: 8px;
+            background: var(--panel); border: 1px solid var(--panel-border);
+            padding: 6px 14px; border-radius: 999px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.35); backdrop-filter: blur(8px);
+            font-size: 12px; white-space: nowrap;
+        }
+        .status-dot {
+            width: 9px; height: 9px; border-radius: 50%; background: var(--warn);
+            display: inline-block; flex-shrink: 0;
+        }
+        .status-dot.ready { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .status-dot.loading { background: var(--warn); animation: pulse 1.2s infinite; }
+        .status-dot.error { background: var(--danger); }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+        /* LEFT SIDEBAR */
+        #sidebar {
+            position: absolute; top: 12px; left: 12px; width: 292px;
+            max-height: calc(62vh - 18px); overflow-y: auto;
+            background: var(--panel); border: 1px solid var(--panel-border);
+            border-radius: 10px; padding: 13px; z-index: 100;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.45); backdrop-filter: blur(8px);
+            display: flex; flex-direction: column; gap: 9px;
+        }
+        .brand-row { display: flex; justify-content: space-between; align-items: baseline; }
+        .brand-title { font-size: 15px; font-weight: 700; letter-spacing: 0.3px; }
+        .brand-sub { font-size: 11px; color: var(--muted); }
+
+        /* RIGHT TDOT PANEL */
+        #toPanel {
+            position: absolute; top: 12px; right: 12px; width: 326px;
+            max-height: calc(62vh - 18px); overflow-y: auto;
+            background: var(--panel); border: 1px solid var(--panel-border);
+            border-radius: 10px; padding: 13px; z-index: 100;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.45); backdrop-filter: blur(8px);
+            display: flex; flex-direction: column; gap: 9px;
+        }
+
+        .card {
+            background: var(--surface); border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px; padding: 9px; display: flex; flex-direction: column; gap: 7px;
+        }
+        .section-label {
+            font-weight: 700; font-size: 10.5px; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 0.6px;
+        }
+        .row { display: flex; gap: 6px; align-items: center; }
+        .row > * { flex: 1; }
+        .check-row {
+            display: flex; align-items: center; gap: 7px; font-size: 12px; color: #cbd5e1;
+            cursor: pointer;
+        }
+        .check-row input { cursor: pointer; accent-color: var(--accent); }
+
+        input[type=text], select {
+            width: 100%; padding: 6px 8px; border-radius: 6px;
+            background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.14);
+            color: var(--text); font-size: 12px; outline: none;
+        }
+        input[type=file] {
+            width: 100%; font-size: 11.5px; color: var(--muted);
+        }
+        button {
+            padding: 7px 10px; border-radius: 6px; border: none;
+            background: var(--accent); color: #fff; font-weight: 600; font-size: 12px;
+            cursor: pointer; transition: background 0.15s, opacity 0.15s;
+        }
+        button:hover:not(:disabled) { background: var(--accent-hover); }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+        button.secondary { background: rgba(255,255,255,0.1); color: var(--text); }
+        button.secondary:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
+        button.success { background: var(--success); }
+        button.success:hover:not(:disabled) { background: #059669; }
+        button.warning { background: var(--warn); color: #111; }
+        button.warning:hover:not(:disabled) { background: #d97706; }
+        button.danger { background: var(--danger); }
+        button.danger:hover:not(:disabled) { background: #dc2626; }
+        button.pill-active { background: var(--accent); color: #fff; }
+
+        #jointListContainer {
+            max-height: 175px; overflow-y: auto; border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.25);
+        }
+        .joint-item {
+            padding: 5px 8px; cursor: pointer; font-size: 11.5px;
+            border-bottom: 1px solid rgba(255,255,255,0.04); color: #cbd5e1;
+        }
+        .joint-item:hover { background: rgba(255,255,255,0.07); }
+        .joint-item.special { color: #93c5fd; font-weight: 600; }
+        .joint-item.active { background: var(--accent); color: #fff; font-weight: 600; }
+
+        /* PROGRESS BAR */
+        .progress-track {
+            width: 100%; height: 10px; border-radius: 999px;
+            background: rgba(255,255,255,0.1); overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%; width: 0%; border-radius: 999px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            transition: width 0.25s ease, background 0.25s ease;
+        }
+        .progress-fill.phase-BALANCE { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .progress-fill.phase-REFINE { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+        .progress-fill.phase-VERIFY, .progress-fill.phase-DONE {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+        .metrics-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+        }
+        .metric-box {
+            background: rgba(0,0,0,0.28); border-radius: 6px; padding: 6px 8px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .metric-label { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+        .metric-val { font-size: 14px; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
+        .badge {
+            display: inline-block; padding: 2px 7px; border-radius: 999px;
+            font-size: 10.5px; font-weight: 700; background: rgba(16,185,129,0.2); color: #34d399;
+        }
+        .badge.warn { background: rgba(245,158,11,0.2); color: #fbbf24; }
+
+        /* BOTTOM CURVE EDITOR */
+        #curveEditor {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 37vh;
+            background: #141821; border-top: 1px solid rgba(255,255,255,0.14);
+            z-index: 100; display: none;
+        }
+        canvas#nativeCurveCanvas {
+            width: 100%; height: 100%; display: block; cursor: crosshair;
+        }
+        #editorControls {
+            position: absolute; top: 8px; left: 12px; right: 12px;
+            display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+        }
+        .control-box {
+            pointer-events: auto; background: rgba(17,20,28,0.88);
+            border: 1px solid rgba(255,255,255,0.12); padding: 4px 10px;
+            border-radius: 6px; font-size: 12px; display: flex; gap: 10px; align-items: center;
+        }
+        #timelineWrapper {
+            position: absolute; bottom: 7px; left: 12px; right: 12px; height: 32px;
+            display: flex; align-items: center; gap: 10px; z-index: 102;
+            background: rgba(17,20,28,0.92); border: 1px solid rgba(255,255,255,0.12);
+            padding: 0 12px; border-radius: 999px;
+        }
+        #playBtn { width: auto; padding: 4px 12px; border-radius: 999px; font-size: 11.5px; }
+        input[type=range] { flex: 1; cursor: pointer; accent-color: var(--accent); }
+        .hint { font-size: 10.5px; color: var(--muted); }
+        details summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/examples/jsm/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "urdf-loader": "https://unpkg.com/urdf-loader@0.12.1/src/URDFLoader.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- TOP PRELOAD STATUS HUD -->
+    <div id="preloadHud">
+        <span id="preloadDot" class="status-dot loading"></span>
+        <span id="preloadText">Connecting to TDOT engine...</span>
+    </div>
+
+    <!-- LEFT SIDEBAR: ROBOT, MOTION, CHANNELS, EXPORT -->
+    <div id="sidebar">
+        <div class="brand-row">
+            <span class="brand-title">TDOT 3D Editor</span>
+            <span class="brand-sub">Unitree G1 29-DoF</span>
+        </div>
+
+        <div class="card">
+            <div class="section-label">1. Motion Input (.npz / .csv / .npy)</div>
+            <input type="file" id="npzInput" accept=".npz,.csv,.npy">
+            <div class="row">
+                <select id="sampleSelect">
+                    <option value="">Loading samples...</option>
+                </select>
+                <button id="loadSampleBtn" class="secondary" style="flex:0 0 68px;">Load</button>
+            </div>
+            <div id="statusMsg" class="hint">No motion loaded — pick a sample or upload a file</div>
+            <div id="rawAuditLine" class="hint" style="display:none; color:#fbbf24;"></div>
+        </div>
+
+        <div class="card">
+            <div class="section-label">2. Curve Channels</div>
+            <div class="row">
+                <button class="secondary" id="smoothBtn">Smooth Curve</button>
+                <button class="secondary" id="revertBtn" disabled>Revert Pre-TO</button>
+            </div>
+            <div class="hint">Keys: &larr;/&rarr; step | &uarr;/&darr; edit | Space play/pause</div>
+            <div id="jointListContainer"></div>
+        </div>
+
+        <div class="card">
+            <div class="section-label">3. Unified Export</div>
+            <button id="saveBtn" class="success" disabled>Download Unified NPZ (MLAB4_Fast + Editor)</button>
+            <button id="saveCsvBtn" class="secondary" disabled>Download LAFAN1 CSV (30Hz)</button>
+        </div>
+
+        <details>
+            <summary>Robot URDF (Auto-loaded G1 29-DoF)</summary>
+            <div class="row" style="margin-top:6px;">
+                <input type="text" id="urdfName" value="unitree_g1/urdf/g1_29dof_torsobase_popsicle.urdf">
+                <button id="loadUrdfBtn" class="secondary" style="flex:0 0 62px;">Load</button>
+            </div>
+        </details>
+    </div>
+
+    <!-- RIGHT PANEL: TDOT DYNAMIC TRAJECTORY OPTIMIZATION -->
+    <div id="toPanel">
+        <div class="brand-row">
+            <span class="brand-title">Dynamic TO Engine</span>
+            <span class="badge">IEEE FP32</span>
+        </div>
+
+        <div class="card">
+            <div class="section-label">NablaMimic + SuperMimic-lite + MuJoCo 4.0</div>
+            <div class="row">
+                <label style="flex:0 0 58px; color:var(--muted); font-size:12px;">Preset</label>
+                <select id="presetSelect">
+                    <option value="fast">Fast (~10s auto-stop)</option>
+                    <option value="standard" selected>Standard (~15s balanced)</option>
+                    <option value="tight">Tight Precision</option>
+                </select>
+            </div>
+            <div class="row">
+                <label style="flex:0 0 98px; color:var(--muted); font-size:12px;">Pre-Smooth</label>
+                <select id="smoothWinSelect">
+                    <option value="0" selected>Off (Raw)</option>
+                    <option value="7">Light (SavGol 7)</option>
+                    <option value="11">Medium (SavGol 11)</option>
+                </select>
+            </div>
+            <label class="check-row">
+                <input type="checkbox" id="warmStartChk">
+                <span>Warm-Start Weights (3–6s after edits)</span>
+            </label>
+            <label class="check-row">
+                <input type="checkbox" id="floorAlignChk" checked>
+                <span>Auto Floor-Align & Clamp Joint Limits</span>
+            </label>
+            <div class="row" style="margin-top:2px;">
+                <button id="runToBtn" disabled>Run Dynamic TO</button>
+                <button id="cancelToBtn" class="danger" style="display:none; flex:0 0 120px;">Stop & Use Best</button>
+            </div>
+        </div>
+
+        <!-- LIVE PHYSICS PROGRESS BAR -->
+        <div class="card" id="progressCard" style="display:none;">
+            <div class="row" style="justify-content:space-between;">
+                <span id="phaseLabel" style="font-weight:700; font-size:12px;">Starting...</span>
+                <span id="pctLabel" style="font-weight:700; font-variant-numeric:tabular-nums; text-align:right; flex:0 0 auto;">0%</span>
+            </div>
+            <div class="progress-track">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div class="row" style="justify-content:space-between; font-size:11px; color:var(--muted);">
+                <span id="wallLabel">Elapsed: 0.0s</span>
+                <span id="etaLabel" style="text-align:right;">ETA: estimating...</span>
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-label">Survival</div>
+                    <div class="metric-val" id="mAlive">--%</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">MPJPE</div>
+                    <div class="metric-val" id="mMpjpe">-- mm</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Return</div>
+                    <div class="metric-val" id="mReturn">--</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">Iteration</div>
+                    <div class="metric-val" id="mIter">0</div>
+                </div>
+            </div>
+            <div id="detailLabel" class="hint" style="color:#cbd5e1;"></div>
+        </div>
+
+        <!-- RESULT & COMPARISON CARD -->
+        <div class="card" id="resultCard" style="display:none;">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+                <span class="section-label">MuJoCo 4.0 Verification</span>
+                <span id="stopReasonBadge" class="badge">TARGET_MET</span>
+            </div>
+            <div id="verifySummary" style="font-size:11.5px; line-height:1.5; color:#cbd5e1;"></div>
+            <div class="row">
+                <button id="viewOptBtn" class="pill-active">Optimized</button>
+                <button id="viewOrigBtn" class="secondary">Original</button>
+            </div>
+            <label class="check-row">
+                <input type="checkbox" id="showGhostChk" checked>
+                <span>Overlay Original Curve (Orange Dashed)</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- BOTTOM 2D CURVE EDITOR -->
+    <div id="curveEditor">
+        <div id="editorControls">
+            <div class="control-box">
+                <span style="font-weight:700; color:#60a5fa;" id="activeJointName">None</span>
+                <span id="curveLegend" class="hint"></span>
+            </div>
+            <div class="control-box">
+                <span>Frame: <b id="frameDisplay">0</b></span>
+                <span>Value: <b id="valDisplay">0.000</b></span>
+            </div>
+        </div>
+        <div id="timelineWrapper">
+            <button id="playBtn" class="secondary">Play</button>
+            <input type="range" id="timelineSlider" min="0" max="100" value="0">
+            <span id="timeDisplay" class="hint" style="min-width:72px; text-align:right; font-variant-numeric:tabular-nums;">0.00s</span>
+        </div>
+        <canvas id="nativeCurveCanvas"></canvas>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+        import URDFLoader from 'urdf-loader';
+
+        // =========================================================
+        //  APP STATE
+        // =========================================================
+        let robot = null;
+        const jointsMap = {};
+        let motionData = null;          // Currently active motion being viewed/edited
+        let originalMotion = null;      // Snapshot before last TO run
+        let optimizedMotion = null;     // Result from last TO run
+        let lastJobId = null;
+        let isEditedSinceTO = false;
+        let activeView = 'optimized';   // 'optimized' | 'original'
+        let currentFrame = 0;
+        let activeIndex = -1;
+        let activeType = 'joint';
+        let isPlaying = false;
+        let lastPlayTs = 0;
+        let playAccum = 0;
+        let activeEventSource = null;
+        let runningJobId = null;
+        let hasCompletedOnce = false;
+
+        // =========================================================
+        //  3D SCENE
+        // =========================================================
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x161922);
+
+        const grid = new THREE.GridHelper(30, 30, 0x3b455c, 0x242b3a);
+        grid.rotateX(Math.PI / 2);
+        scene.add(grid);
+        scene.add(new THREE.AxesHelper(0.8));
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 200);
+        camera.position.set(2.4, -2.6, 1.8);
+        camera.up.set(0, 0, 1);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.8);
+        keyLight.position.set(4, -4, 8);
+        scene.add(keyLight);
+        const fillLight = new THREE.DirectionalLight(0x9ec5fe, 0.7);
+        fillLight.position.set(-5, 5, 3);
+        scene.add(fillLight);
+        scene.add(new THREE.AmbientLight(0x606b80, 0.9));
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 0.8);
+
+        function loadRobotURDF(relPath) {
+            const btn = document.getElementById('loadUrdfBtn');
+            btn.innerText = '...';
+            new URDFLoader().load(
+                `/static/${relPath}`,
+                (r) => {
+                    if (robot) scene.remove(robot);
+                    robot = r;
+                    scene.add(robot);
+                    Object.keys(jointsMap).forEach(k => delete jointsMap[k]);
+                    for (const k in robot.joints) jointsMap[k] = robot.joints[k];
+                    btn.innerText = 'OK';
+                    if (motionData) update3DRobot(currentFrame);
+                },
+                undefined,
+                (err) => {
+                    console.error('URDF load failed:', err);
+                    btn.innerText = 'Err';
+                }
+            );
+        }
+
+        // =========================================================
+        //  2D CURVE CANVAS
+        // =========================================================
+        const canvas = document.getElementById('nativeCurveCanvas');
+        const ctx = canvas.getContext('2d');
+        let editorWidth = 800, editorHeight = 260;
+        let isDragging = false, dragIndex = -1, hoverIndex = -1;
+        const PAD_TOP = 42, PAD_BOTTOM = 48, PAD_LEFT = 14, PAD_RIGHT = 14;
+
+        function resizeEditor() {
+            const parent = document.getElementById('curveEditor');
+            if (parent.style.display === 'none') return;
+            editorWidth = parent.clientWidth;
+            editorHeight = parent.clientHeight;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.max(1, Math.floor(editorWidth * dpr));
+            canvas.height = Math.max(1, Math.floor(editorHeight * dpr));
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            drawCurve();
+        }
+
+        function getChannelValueFrom(dataObj, f) {
+            if (!dataObj || f < 0 || f >= dataObj.num_frames) return 0;
+            if (activeType === 'joint') return dataObj.joint_pos[f][activeIndex];
+            if (activeType === 'pos') return dataObj.base_pos_w[f][activeIndex];
+            if (activeType === 'rot') {
+                const qRaw = dataObj.base_quat_w[f];
+                const q = new THREE.Quaternion(qRaw[1], qRaw[2], qRaw[3], qRaw[0]);
+                const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+                return [e.x, e.y, e.z][activeIndex];
+            }
+            return 0;
+        }
+
+        function getChannelValue(f) { return getChannelValueFrom(motionData, f); }
+
+        function setChannelValue(f, val) {
+            if (!motionData) return;
+            isEditedSinceTO = true;
+            if (activeType === 'joint') {
+                motionData.joint_pos[f][activeIndex] = val;
+            } else if (activeType === 'pos') {
+                motionData.base_pos_w[f][activeIndex] = val;
+            } else if (activeType === 'rot') {
+                const qRaw = motionData.base_quat_w[f];
+                const q = new THREE.Quaternion(qRaw[1], qRaw[2], qRaw[3], qRaw[0]);
+                const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+                if (activeIndex === 0) e.x = val;
+                if (activeIndex === 1) e.y = val;
+                if (activeIndex === 2) e.z = val;
+                q.setFromEuler(e);
+                motionData.base_quat_w[f] = [q.w, q.x, q.y, q.z];
+            }
+        }
+
+        function drawCurve() {
+            if (!motionData || activeIndex === -1) return;
+            ctx.clearRect(0, 0, editorWidth, editorHeight);
+
+            const count = motionData.num_frames;
+            const vals = new Array(count);
+            for (let i = 0; i < count; i++) vals[i] = getChannelValue(i);
+
+            const showGhost = document.getElementById('showGhostChk').checked &&
+                originalMotion && optimizedMotion && activeView === 'optimized' &&
+                originalMotion.num_frames === count;
+            let ghostVals = null;
+            if (showGhost) {
+                ghostVals = new Array(count);
+                for (let i = 0; i < count; i++) ghostVals[i] = getChannelValueFrom(originalMotion, i);
+            }
+
+            let minVal = activeType === 'pos' ? -0.5 : -2.5;
+            let maxVal = activeType === 'pos' ? 1.2 : 2.5;
+            const allVals = ghostVals ? vals.concat(ghostVals) : vals;
+            let dMin = Infinity, dMax = -Infinity;
+            for (let i = 0; i < allVals.length; i++) {
+                if (allVals[i] < dMin) dMin = allVals[i];
+                if (allVals[i] > dMax) dMax = allVals[i];
+            }
+            if (dMin < minVal) minVal = dMin - 0.1;
+            if (dMax > maxVal) maxVal = dMax + 0.1;
+
+            const valRange = Math.max(1e-4, maxVal - minVal);
+            const drawH = Math.max(10, editorHeight - PAD_TOP - PAD_BOTTOM);
+            const drawW = Math.max(10, editorWidth - PAD_LEFT - PAD_RIGHT);
+            const stepX = drawW / Math.max(1, count - 1);
+            const getX = (i) => PAD_LEFT + i * stepX;
+            const getY = (v) => PAD_TOP + drawH - ((v - minVal) / valRange) * drawH;
+
+            // Zero grid line
+            const yZero = getY(0);
+            if (yZero > PAD_TOP && yZero < editorHeight - PAD_BOTTOM) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+                ctx.lineWidth = 1;
+                ctx.moveTo(PAD_LEFT, yZero);
+                ctx.lineTo(editorWidth - PAD_RIGHT, yZero);
+                ctx.stroke();
+            }
+
+            // Original Ghost Curve (dashed orange)
+            if (ghostVals) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
+                ctx.lineWidth = 1.6;
+                ctx.setLineDash([5, 4]);
+                ctx.moveTo(getX(0), getY(ghostVals[0]));
+                for (let i = 1; i < count; i++) ctx.lineTo(getX(i), getY(ghostVals[i]));
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Active Curve
+            ctx.beginPath();
+            ctx.strokeStyle = (activeView === 'original' && optimizedMotion) ? '#f59e0b' : '#38bdf8';
+            ctx.lineWidth = 2.2;
+            ctx.moveTo(getX(0), getY(vals[0]));
+            for (let i = 1; i < count; i++) ctx.lineTo(getX(i), getY(vals[i]));
+            ctx.stroke();
+
+            // Current frame vertical bar
+            const xCurr = getX(currentFrame);
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+            ctx.setLineDash([4, 4]);
+            ctx.moveTo(xCurr, PAD_TOP);
+            ctx.lineTo(xCurr, editorHeight - PAD_BOTTOM);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Keyframe dots (decimate for long clips so canvas stays 60fps)
+            const stride = Math.max(1, Math.floor(count / 240));
+            for (let i = 0; i < count; i += stride) {
+                const cx = getX(i), cy = getY(vals[i]);
+                ctx.beginPath();
+                ctx.fillStyle = '#38bdf8';
+                ctx.arc(cx, cy, 2.0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Highlight current & hover points
+            if (hoverIndex >= 0 && hoverIndex < count) {
+                ctx.beginPath();
+                ctx.fillStyle = '#fbbf24';
+                ctx.arc(getX(hoverIndex), getY(vals[hoverIndex]), 4.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.beginPath();
+            ctx.fillStyle = '#ef4444';
+            ctx.arc(xCurr, getY(vals[currentFrame]), 5.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            document.getElementById('curveLegend').innerText = showGhost
+                ? 'Blue: Optimized (MuJoCo 4.0)  |  Orange Dashed: Original'
+                : (activeView === 'original' && optimizedMotion ? 'Viewing Original (pre-TO)' : '');
+
+            canvas.scaleInfo = { minVal, valRange, drawH, stepX, getX, getY };
+        }
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!motionData || !canvas.scaleInfo) return;
+            const m = getMousePos(e);
+            const info = canvas.scaleInfo;
+            const idx = Math.max(0, Math.min(motionData.num_frames - 1, Math.round((m.x - PAD_LEFT) / info.stepX)));
+            isPlaying = false;
+            document.getElementById('playBtn').innerText = 'Play';
+            update3DRobot(idx);
+            dragIndex = idx;
+            const py = info.getY(getChannelValue(idx));
+            if (Math.abs(m.y - py) < 28) isDragging = true;
+            drawCurve();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!motionData || !canvas.scaleInfo) return;
+            const m = getMousePos(e);
+            const info = canvas.scaleInfo;
+            if (isDragging && dragIndex !== -1) {
+                const newVal = ((PAD_TOP + info.drawH - m.y) / info.drawH) * info.valRange + info.minVal;
+                setChannelValue(dragIndex, newVal);
+                document.getElementById('valDisplay').innerText = newVal.toFixed(3);
+                update3DRobot(dragIndex);
+                drawCurve();
+                return;
+            }
+            const idx = Math.round((m.x - PAD_LEFT) / info.stepX);
+            if (idx >= 0 && idx < motionData.num_frames) {
+                const val = getChannelValue(idx);
+                const py = info.getY(val);
+                if (Math.abs(m.y - py) < 26) {
+                    hoverIndex = idx;
+                    canvas.style.cursor = 'pointer';
+                    document.getElementById('valDisplay').innerText = val.toFixed(3);
+                } else {
+                    hoverIndex = -1;
+                    canvas.style.cursor = 'crosshair';
+                }
+            }
+            drawCurve();
+        });
+        canvas.addEventListener('mouseup', () => { isDragging = false; dragIndex = -1; });
+        canvas.addEventListener('mouseleave', () => { isDragging = false; dragIndex = -1; hoverIndex = -1; });
+
+        // =========================================================
+        //  ROBOT UPDATE & KEYBOARD / PLAYBACK LOOP
+        // =========================================================
+        const slider = document.getElementById('timelineSlider');
+        function update3DRobot(f) {
+            if (!motionData) return;
+            currentFrame = Math.max(0, Math.min(motionData.num_frames - 1, f));
+            document.getElementById('frameDisplay').innerText = `${currentFrame}/${motionData.num_frames - 1}`;
+            slider.value = currentFrame;
+            const fps = motionData.framerate || 50.0;
+            document.getElementById('timeDisplay').innerText = `${(currentFrame / fps).toFixed(2)}s`;
+            if (activeIndex !== -1) {
+                document.getElementById('valDisplay').innerText = getChannelValue(currentFrame).toFixed(3);
+            }
+            if (!robot) return;
+            const p = motionData.base_pos_w[currentFrame];
+            const q = motionData.base_quat_w[currentFrame];
+            robot.position.set(p[0], p[1], p[2]);
+            robot.quaternion.set(q[1], q[2], q[3], q[0]);
+            const jvals = motionData.joint_pos[currentFrame];
+            for (let i = 0; i < motionData.joint_names.length; i++) {
+                const j = jointsMap[motionData.joint_names[i]];
+                if (j) j.setJointValue(jvals[i]);
+            }
+        }
+
+        const keyStates = { up: false, down: false };
+        window.addEventListener('keydown', (e) => {
+            if (e.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            if (!motionData) return;
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlay();
+                return;
+            }
+            if (e.key === 'ArrowLeft') {
+                if (!e.repeat) { update3DRobot(currentFrame - 1); drawCurve(); }
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight') {
+                if (!e.repeat) { update3DRobot(currentFrame + 1); drawCurve(); }
+                e.preventDefault();
+            } else if (e.key === 'ArrowUp') { keyStates.up = true; e.preventDefault(); }
+            else if (e.key === 'ArrowDown') { keyStates.down = true; e.preventDefault(); }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowUp') keyStates.up = false;
+            if (e.key === 'ArrowDown') keyStates.down = false;
+        });
+
+        function togglePlay() {
+            if (!motionData) return;
+            isPlaying = !isPlaying;
+            lastPlayTs = performance.now();
+            playAccum = 0;
+            document.getElementById('playBtn').innerText = isPlaying ? 'Pause' : 'Play';
+        }
+        document.getElementById('playBtn').addEventListener('click', togglePlay);
+        slider.addEventListener('input', (e) => {
+            isPlaying = false;
+            document.getElementById('playBtn').innerText = 'Play';
+            update3DRobot(parseInt(e.target.value, 10));
+            drawCurve();
+        });
+
+        function animate(ts) {
+            requestAnimationFrame(animate);
+            if (isPlaying && motionData) {
+                const dt = Math.min(0.1, (ts - lastPlayTs) / 1000.0);
+                lastPlayTs = ts;
+                const fps = motionData.framerate || 50.0;
+                playAccum += dt * fps;
+                if (playAccum >= 1.0) {
+                    const step = Math.floor(playAccum);
+                    playAccum -= step;
+                    const nextF = (currentFrame + step) % motionData.num_frames;
+                    update3DRobot(nextF);
+                    drawCurve();
+                }
+            }
+            if (motionData && activeIndex !== -1 && (keyStates.up || keyStates.down)) {
+                const step = activeType === 'pos' ? 0.0025 : 0.012;
+                const delta = (keyStates.up ? step : 0) - (keyStates.down ? step : 0);
+                if (delta !== 0) {
+                    setChannelValue(currentFrame, getChannelValue(currentFrame) + delta);
+                    update3DRobot(currentFrame);
+                    drawCurve();
+                }
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        requestAnimationFrame(animate);
+
+        // =========================================================
+        //  LOAD MOTION INTO EDITOR
+        // =========================================================
+        function cloneMotion(m) { return JSON.parse(JSON.stringify(m)); }
+
+        function applyLoadedMotion(data, { resetCompare = true } = {}) {
+            motionData = data;
+            if (resetCompare) {
+                originalMotion = cloneMotion(data);
+                optimizedMotion = null;
+                lastJobId = null;
+                isEditedSinceTO = false;
+                activeView = 'original';
+                document.getElementById('resultCard').style.display = 'none';
+                document.getElementById('revertBtn').disabled = true;
+            }
+            const fps = data.framerate || 50.0;
+            const dur = ((data.num_frames - 1) / fps).toFixed(2);
+            document.getElementById('statusMsg').innerText =
+                `${data.name || 'motion'} • ${data.num_frames}f @ ${fps.toFixed(0)}Hz (${dur}s, ${data.source_format || 'npz'})`;
+
+            const auditEl = document.getElementById('rawAuditLine');
+            if (data.audit) {
+                const a = data.audit;
+                auditEl.style.display = 'block';
+                const jntPct = (a.joint_limit_violation_frac || 0) * 100.0;
+                auditEl.innerText =
+                    `Foot Z min: ${Number(a.foot_min_z_mm || 0).toFixed(0)}mm | ` +
+                    `Penet: ${Number(a.foot_penetration_max_mm || 0).toFixed(0)}mm | ` +
+                    `Float: ${Number(a.foot_float_max_mm || 0).toFixed(0)}mm | ` +
+                    `JntLim: ${jntPct.toFixed(1)}%`;
+                auditEl.style.color = ((a.foot_penetration_max_mm || 0) > 15 || jntPct > 0.5) ? '#fbbf24' : '#34d399';
+            } else {
+                auditEl.style.display = 'none';
+            }
+
+            document.getElementById('curveEditor').style.display = 'block';
+            document.getElementById('runToBtn').disabled = false;
+            document.getElementById('saveBtn').disabled = false;
+            document.getElementById('saveCsvBtn').disabled = false;
+
+            slider.max = data.num_frames - 1;
+            slider.value = 0;
+
+            const list = document.getElementById('jointListContainer');
+            list.innerHTML = '';
+            const addHeader = (t) => {
+                const d = document.createElement('div');
+                d.className = 'section-label';
+                d.style.padding = '5px 8px 2px';
+                d.innerText = t;
+                list.appendChild(d);
+            };
+            const addItem = (n, t, i, s = false) => {
+                const div = document.createElement('div');
+                div.className = 'joint-item' + (s ? ' special' : '');
+                div.innerText = n;
+                div.onclick = () => selectChannel(t, i, n, div);
+                list.appendChild(div);
+                return div;
+            };
+
+            addHeader('Base Position');
+            const firstItem = addItem('Base X', 'pos', 0, true);
+            addItem('Base Y', 'pos', 1, true);
+            const baseZItem = addItem('Base Z', 'pos', 2, true);
+            addHeader('Base Rotation');
+            addItem('Roll', 'rot', 0, true);
+            addItem('Pitch', 'rot', 1, true);
+            addItem('Yaw', 'rot', 2, true);
+            addHeader('G1 29 Joints');
+            data.joint_names.forEach((n, i) => addItem(n, 'joint', i));
+
+            selectChannel('pos', 2, 'Base Z', baseZItem || firstItem);
+            update3DRobot(0);
+            setTimeout(resizeEditor, 30);
+        }
+
+        function selectChannel(type, idx, name, el) {
+            document.querySelectorAll('.joint-item').forEach(x => x.classList.remove('active'));
+            if (el) el.classList.add('active');
+            document.getElementById('activeJointName').innerText = name;
+            activeType = type;
+            activeIndex = idx;
+            drawCurve();
+        }
+
+        // Upload & Sample loading
+        document.getElementById('npzInput').addEventListener('change', async (e) => {
+            if (!e.target.files.length) return;
+            const fd = new FormData();
+            fd.append('file', e.target.files[0]);
+            try {
+                const res = await fetch('/upload_motion', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || 'Upload failed');
+                applyLoadedMotion(data, { resetCompare: true });
+            } catch (err) { alert(err.message); }
+        });
+
+        async function populateSamples() {
+            const sel = document.getElementById('sampleSelect');
+            try {
+                const res = await fetch('/api/samples');
+                const data = await res.json();
+                sel.innerHTML = '';
+                if (!data.samples || !data.samples.length) {
+                    sel.innerHTML = '<option value="">No bundled samples</option>';
+                    return;
+                }
+                for (const s of data.samples) {
+                    const opt = document.createElement('option');
+                    opt.value = s.filename;
+                    opt.innerText = `${s.filename} (${s.size_kb} KB)`;
+                    opt.title = s.label;
+                    sel.appendChild(opt);
+                }
+            } catch {
+                sel.innerHTML = '<option value="">Samples unavailable</option>';
+            }
+        }
+
+        document.getElementById('loadSampleBtn').addEventListener('click', async () => {
+            const fname = document.getElementById('sampleSelect').value;
+            if (!fname) return;
+            try {
+                const res = await fetch(`/api/load_sample/${encodeURIComponent(fname)}`);
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || 'Load failed');
+                applyLoadedMotion(data, { resetCompare: true });
+            } catch (err) { alert(err.message); }
+        });
+
+        document.getElementById('loadUrdfBtn').addEventListener('click', () => {
+            const p = document.getElementById('urdfName').value.trim();
+            if (p) loadRobotURDF(p);
+        });
+
+        // Smooth & Revert
+        document.getElementById('smoothBtn').addEventListener('click', () => {
+            if (!motionData || activeIndex === -1) return;
+            const n = motionData.num_frames;
+            const raw = Array.from({ length: n }, (_, i) => getChannelValue(i));
+            for (let i = 0; i < n; i++) {
+                let s = 0, c = 0;
+                for (let j = i - 2; j <= i + 2; j++) { if (j >= 0 && j < n) { s += raw[j]; c++; } }
+                setChannelValue(i, s / c);
+            }
+            drawCurve();
+            update3DRobot(currentFrame);
+        });
+
+        document.getElementById('revertBtn').addEventListener('click', () => {
+            if (!originalMotion) return;
+            motionData = cloneMotion(originalMotion);
+            activeView = 'original';
+            isEditedSinceTO = true;
+            updateViewButtons();
+            update3DRobot(Math.min(currentFrame, motionData.num_frames - 1));
+            drawCurve();
+        });
+
+        // =========================================================
+        //  PRELOAD STATUS POLLING
+        // =========================================================
+        async function pollPreload() {
+            const dot = document.getElementById('preloadDot');
+            const txt = document.getElementById('preloadText');
+            try {
+                const res = await fetch('/api/preload_status');
+                const st = await res.json();
+                const mjMs = st.mujoco_boot_ms != null ? `${st.mujoco_boot_ms}ms` : '';
+                if (st.state === 'ready') {
+                    dot.className = 'status-dot ready';
+                    const b = (st.preloaded_buckets || []).join(',') || 'on-demand';
+                    txt.innerText = `GPU Ready (${st.gpu || 'CUDA'}) • Bucket [${b}] Hot • MuJoCo ${st.mujoco_version || '4.0'} (${mjMs})`;
+                    setTimeout(pollPreload, 10000);
+                    return;
+                } else if (st.state === 'unavailable' || st.state === 'stopped') {
+                    dot.className = 'status-dot error';
+                    txt.innerText = st.detail || 'NablaEngine unavailable';
+                } else {
+                    dot.className = 'status-dot loading';
+                    txt.innerText = st.detail || 'Preloading NablaEngine...';
+                }
+            } catch {
+                dot.className = 'status-dot error';
+                txt.innerText = 'Server offline';
+            }
+            setTimeout(pollPreload, 1200);
+        }
+
+        // =========================================================
+        //  DYNAMIC TO STREAMING & PHYSICS PROGRESS BAR
+        // =========================================================
+        function renderProgress(ev) {
+            const card = document.getElementById('progressCard');
+            card.style.display = 'flex';
+            const pct = Math.max(0, Math.min(100, Number(ev.percent || 0)));
+            const phase = ev.phase || 'BALANCE';
+
+            document.getElementById('phaseLabel').innerText = ev.phase_label || phase;
+            document.getElementById('pctLabel').innerText = `${pct.toFixed(0)}%`;
+            const fill = document.getElementById('progressFill');
+            fill.style.width = `${pct}%`;
+            fill.className = `progress-fill phase-${phase}`;
+
+            const wall = ev.wall_s != null ? `${Number(ev.wall_s).toFixed(1)}s` : '0.0s';
+            document.getElementById('wallLabel').innerText = `Elapsed: ${wall}`;
+            document.getElementById('etaLabel').innerText =
+                (ev.eta_s != null && phase !== 'DONE') ? `ETA: ~${Number(ev.eta_s).toFixed(1)}s` : (phase === 'DONE' ? 'Complete' : 'ETA: ...');
+
+            if (ev.alive_pct != null) document.getElementById('mAlive').innerText = `${Number(ev.alive_pct).toFixed(1)}%`;
+            if (ev.mpjpe_mm != null && ev.mpjpe_mm > 0) document.getElementById('mMpjpe').innerText = `${Number(ev.mpjpe_mm).toFixed(1)} mm`;
+            if (ev.full_norm_return != null && ev.full_norm_return > 0) document.getElementById('mReturn').innerText = Number(ev.full_norm_return).toFixed(3);
+            if (ev.iteration != null) document.getElementById('mIter').innerText = String(ev.iteration);
+            if (ev.detail) document.getElementById('detailLabel').innerText = ev.detail;
+        }
+
+        function updateViewButtons() {
+            const optBtn = document.getElementById('viewOptBtn');
+            const origBtn = document.getElementById('viewOrigBtn');
+            optBtn.className = activeView === 'optimized' ? 'pill-active' : 'secondary';
+            origBtn.className = activeView === 'original' ? 'pill-active' : 'secondary';
+        }
+
+        document.getElementById('viewOptBtn').addEventListener('click', () => {
+            if (!optimizedMotion) return;
+            motionData = cloneMotion(optimizedMotion);
+            activeView = 'optimized';
+            updateViewButtons();
+            update3DRobot(Math.min(currentFrame, motionData.num_frames - 1));
+            drawCurve();
+        });
+        document.getElementById('viewOrigBtn').addEventListener('click', () => {
+            if (!originalMotion) return;
+            motionData = cloneMotion(originalMotion);
+            activeView = 'original';
+            updateViewButtons();
+            update3DRobot(Math.min(currentFrame, motionData.num_frames - 1));
+            drawCurve();
+        });
+        document.getElementById('showGhostChk').addEventListener('change', drawCurve);
+
+        function setRunningUI(running) {
+            document.getElementById('runToBtn').disabled = running || !motionData;
+            document.getElementById('runToBtn').innerText = running ? 'Optimizing...' : 'Run Dynamic TO';
+            document.getElementById('cancelToBtn').style.display = running ? 'block' : 'none';
+        }
+
+        document.getElementById('runToBtn').addEventListener('click', async () => {
+            if (!motionData) return;
+            if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
+
+            originalMotion = cloneMotion(motionData);
+            setRunningUI(true);
+            renderProgress({
+                percent: 2, phase: 'SANITIZE', phase_label: 'Sanitizing Input Trajectory',
+                wall_s: 0, eta_s: null, detail: '50Hz SLERP resampling & kinematic audit...'
+            });
+
+            try {
+                const res = await fetch('/api/to/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        motion: motionData,
+                        preset: document.getElementById('presetSelect').value,
+                        warm_start: document.getElementById('warmStartChk').checked,
+                        smooth_window: parseInt(document.getElementById('smoothWinSelect').value, 10) || 0,
+                        floor_align: document.getElementById('floorAlignChk').checked,
+                        clamp_joints: document.getElementById('floorAlignChk').checked,
+                    }),
+                });
+                const startData = await res.json();
+                if (!res.ok || startData.error) throw new Error(startData.error || 'Failed to start TO');
+
+                runningJobId = startData.job_id;
+                const es = new EventSource(`/api/to/stream/${runningJobId}`);
+                activeEventSource = es;
+
+                es.onmessage = (msg) => {
+                    const ev = JSON.parse(msg.data);
+                    if (ev.type === 'PROGRESS') {
+                        renderProgress(ev);
+                    } else if (ev.type === 'DONE') {
+                        es.close();
+                        activeEventSource = null;
+                        runningJobId = null;
+                        setRunningUI(false);
+
+                        const mv = ev.mujoco_verify || {};
+                        const tm = ev.timing || {};
+                        renderProgress({
+                            percent: 100, phase: 'DONE',
+                            phase_label: `Done (${ev.stop_reason})`,
+                            wall_s: tm.end_to_end_s || tm.optimization_s || 0,
+                            eta_s: 0,
+                            alive_pct: (mv.alive_frac || 0) * 100,
+                            mpjpe_mm: mv.mpjpe_mm || 0,
+                            full_norm_return: mv.full_norm_return || 0,
+                            iteration: (ev.nabla_best || {}).iteration || 0,
+                            detail: `Opt ${tm.optimization_s}s • Compile ${tm.compile_s}s • MuJoCo4 Verify ${tm.verify_s}s` +
+                                (ev.used_warm_start ? ' • Warm-Started' : ''),
+                        });
+
+                        optimizedMotion = ev.motion;
+                        lastJobId = ev.job_id;
+                        isEditedSinceTO = false;
+                        activeView = 'optimized';
+                        hasCompletedOnce = true;
+                        document.getElementById('warmStartChk').checked = true;
+                        document.getElementById('revertBtn').disabled = false;
+
+                        // Replace active motion with MuJoCo 4.0 verified motion (keep same channel if possible)
+                        const prevType = activeType, prevIdx = activeIndex;
+                        applyLoadedMotion(cloneMotion(optimizedMotion), { resetCompare: false });
+                        if (prevIdx >= 0) {
+                            activeType = prevType;
+                            activeIndex = prevIdx;
+                            drawCurve();
+                        }
+
+                        // Populate comparison card
+                        document.getElementById('resultCard').style.display = 'flex';
+                        const badge = document.getElementById('stopReasonBadge');
+                        badge.innerText = ev.stop_reason || 'DONE';
+                        badge.className = (mv.alive_frac >= 0.99) ? 'badge' : 'badge warn';
+
+                        const optAudit = (optimizedMotion.audit || {});
+                        const rawAudit = (originalMotion.audit || {});
+                        document.getElementById('verifySummary').innerHTML =
+                            `<b>MuJoCo 4.0 Closed-Loop:</b> ${(mv.alive_frac * 100).toFixed(1)}% survival • ` +
+                            `Return <b>${Number(mv.full_norm_return || 0).toFixed(4)}</b> • MPJPE <b>${Number(mv.mpjpe_mm || 0).toFixed(1)} mm</b><br>` +
+                            `<b>Speed:</b> Opt <b>${tm.optimization_s}s</b> + Compile <b>${tm.compile_s}s</b> + Verify <b>${tm.verify_s}s</b><br>` +
+                            `<b>Max Foot Penet:</b> ${Number(rawAudit.foot_penetration_max_mm ?? 0).toFixed(1)}mm &rarr; <b>${Number(optAudit.foot_penetration_max_mm ?? 0).toFixed(1)}mm</b>`;
+                        updateViewButtons();
+                    } else if (ev.type === 'ERROR') {
+                        es.close();
+                        activeEventSource = null;
+                        runningJobId = null;
+                        setRunningUI(false);
+                        alert(`TO Error: ${ev.error}`);
+                    }
+                };
+                es.onerror = () => {
+                    es.close();
+                    activeEventSource = null;
+                    runningJobId = null;
+                    setRunningUI(false);
+                };
+            } catch (err) {
+                setRunningUI(false);
+                alert(err.message);
+            }
+        });
+
+        document.getElementById('cancelToBtn').addEventListener('click', async () => {
+            if (!runningJobId) return;
+            document.getElementById('cancelToBtn').disabled = true;
+            document.getElementById('detailLabel').innerText = 'Stopping & returning best trajectory found so far...';
+            try {
+                await fetch(`/api/to/cancel/${runningJobId}`, { method: 'POST' });
+            } finally {
+                setTimeout(() => { document.getElementById('cancelToBtn').disabled = false; }, 1000);
+            }
+        });
+
+        // =========================================================
+        //  FAST UNIFIED EXPORT (0ms cached download or live save)
+        // =========================================================
+        async function triggerDownload(fmt) {
+            if (!motionData) return;
+            const btn = fmt === 'csv' ? document.getElementById('saveCsvBtn') : document.getElementById('saveBtn');
+            const origText = btn.innerText;
+            btn.innerText = 'Exporting...';
+            btn.disabled = true;
+            try {
+                let res;
+                if (lastJobId && !isEditedSinceTO && activeView === 'optimized') {
+                    res = await fetch(`/api/to/download/${lastJobId}?fmt=${fmt}`);
+                } else {
+                    res = await fetch('/save_motion', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...motionData, export_format: fmt }),
+                    });
+                }
+                if (!res.ok) throw new Error('Export failed');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const base = (motionData.name || 'tdot_motion').replace(/[^a-zA-Z0-9_-]/g, '_');
+                a.download = fmt === 'csv' ? `${base}_lafan1_30hz.csv` : `${base}_mlab4_editor.npz`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.innerText = origText;
+                btn.disabled = false;
+            }
+        }
+        document.getElementById('saveBtn').addEventListener('click', () => triggerDownload('npz'));
+        document.getElementById('saveCsvBtn').addEventListener('click', () => triggerDownload('csv'));
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            resizeEditor();
+        });
+
+        // Boot sequence
+        loadRobotURDF('unitree_g1/urdf/g1_29dof_torsobase_popsicle.urdf');
+        populateSamples();
+        pollPreload();
+    </script>
+</body>
+</html>
